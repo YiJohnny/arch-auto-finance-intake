@@ -1,0 +1,13 @@
+.env*.local
+.next
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.DS_Store
+*.docx
+compnay_logo.png
+public/company_logo.png
+Retail_Record/**/*.xlsx
+Retail_Record/import_review.csv
