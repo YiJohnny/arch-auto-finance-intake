@@ -41,9 +41,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <input id="signin_password" name="password" type="password" autoComplete="current-password" required />
           </div>
           <div className="actions split-actions">
-            <Link className="text-link" href="/signup">
-              Create employee account
-            </Link>
+            <div className="auth-link-stack">
+              <Link className="text-link" href="/forgot-password">
+                Forgot password?
+              </Link>
+              <Link className="text-link" href="/signup">
+                Create employee account
+              </Link>
+            </div>
             <button className="button" type="submit">
               Sign In
             </button>
