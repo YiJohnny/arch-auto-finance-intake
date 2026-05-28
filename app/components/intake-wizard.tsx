@@ -72,6 +72,71 @@ export function IntakeWizard() {
   const [searchError, setSearchError] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  // Step 4 controlled fields (needed for OCR pre-fill)
+  const [amount, setAmount] = useState("");
+  const [transactionDate, setTransactionDate] = useState("");
+  const [memo, setMemo] = useState("");
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrFilled, setOcrFilled] = useState<Set<string>>(new Set());
+  const [ocrVendor, setOcrVendor] = useState<string | null>(null);
+
+  // Manual vehicle state — persisted across steps via hidden inputs
+  const [unmatchedVin, setUnmatchedVin] = useState("");
+  const [unmatchedModel, setUnmatchedModel] = useState("");
+  const [unmatchedYear, setUnmatchedYear] = useState("");
+  const [unmatchedMake, setUnmatchedMake] = useState("");
+  const [unmatchedStockNumber, setUnmatchedStockNumber] = useState("");
+
+  function clearManualVehicle() {
+    setManualVehicleMode(false);
+    setUnmatchedVin("");
+    setUnmatchedModel("");
+    setUnmatchedYear("");
+    setUnmatchedMake("");
+    setUnmatchedStockNumber("");
+  }
+
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+
+    setOcrLoading(true);
+    setOcrFilled(new Set());
+    setOcrVendor(null);
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/ocr-receipt", { method: "POST", body: fd });
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const filled = new Set<string>();
+
+      if (data.amount != null) {
+        setAmount(String(data.amount));
+        filled.add("amount");
+      }
+      if (data.date) {
+        setTransactionDate(data.date);
+        filled.add("date");
+      }
+      if (data.memo) {
+        setMemo(data.memo);
+        filled.add("memo");
+      }
+      if (data.vendor) {
+        setOcrVendor(data.vendor);
+      }
+
+      setOcrFilled(filled);
+    } catch {
+      // silently skip OCR errors — user can fill manually
+    } finally {
+      setOcrLoading(false);
+    }
+  }
+
   const needsVehicleStep = useMemo(() => businessCluster !== "general", [businessCluster]);
   const vehicleStepTitle = useMemo(() => {
     if (businessCluster === "repair" && repairContext === "rental_vehicle") {
@@ -99,7 +164,7 @@ export function IntakeWizard() {
     setSearchError("");
     setVehicleMatches([]);
     setSelectedVehicle(null);
-    setManualVehicleMode(false);
+    clearManualVehicle();
 
     if (!query) {
       setSearchError("Enter a VIN, stock number, year, make, model, or color.");
@@ -195,6 +260,12 @@ export function IntakeWizard() {
       <input type="hidden" name="repair_context" value={businessCluster === "repair" ? repairContext : ""} />
       <input type="hidden" name="direction" value={direction} />
       <input type="hidden" name="vehicle_id" value={manualVehicleMode ? "" : (selectedVehicle?.vehicle_id ?? "")} />
+      {/* Manual vehicle values lifted here so they survive step transitions */}
+      <input type="hidden" name="unmatched_vehicle_vin" value={manualVehicleMode ? unmatchedVin : ""} />
+      <input type="hidden" name="unmatched_vehicle_model" value={manualVehicleMode ? unmatchedModel : ""} />
+      <input type="hidden" name="unmatched_vehicle_year" value={manualVehicleMode ? unmatchedYear : ""} />
+      <input type="hidden" name="unmatched_vehicle_make" value={manualVehicleMode ? unmatchedMake : ""} />
+      <input type="hidden" name="unmatched_vehicle_stock_number" value={manualVehicleMode ? unmatchedStockNumber : ""} />
 
       <div className="wizard-steps">
         <div className={step === 1 ? "step active" : "step"}>
@@ -227,8 +298,8 @@ export function IntakeWizard() {
                   } else {
                     setRepairContext("rental_vehicle");
                   }
+                  clearManualVehicle();
                   setSelectedVehicle(null);
-                  setManualVehicleMode(false);
                   setVehicleMatches([]);
                   setVehicleQuery("");
                 }}
@@ -246,10 +317,10 @@ export function IntakeWizard() {
                 value={repairContext}
                 onChange={(event) => {
                   setRepairContext(event.target.value);
+                  clearManualVehicle();
                   setSelectedVehicle(null);
                   setVehicleMatches([]);
                   setVehicleQuery("");
-                  setManualVehicleMode(false);
                 }}
               >
                 {repairContexts.map((context) => (
@@ -356,25 +427,56 @@ export function IntakeWizard() {
               {manualVehicleMode ? (
                 <div className="manual-vehicle">
                   <div className="field">
-                    <label htmlFor="unmatched_vehicle_vin">VIN Number</label>
-                    <input id="unmatched_vehicle_vin" name="unmatched_vehicle_vin" required />
+                    <label htmlFor="uv_vin">VIN Number <span className="muted">(11–17 chars)</span></label>
+                    <input
+                      id="uv_vin"
+                      value={unmatchedVin}
+                      onChange={(e) => setUnmatchedVin(e.target.value)}
+                      minLength={11}
+                      maxLength={17}
+                      required
+                    />
                   </div>
                   <div className="field">
-                    <label htmlFor="unmatched_vehicle_model">Model</label>
-                    <input id="unmatched_vehicle_model" name="unmatched_vehicle_model" required />
+                    <label htmlFor="uv_make">Make</label>
+                    <input
+                      id="uv_make"
+                      value={unmatchedMake}
+                      onChange={(e) => setUnmatchedMake(e.target.value)}
+                      required
+                    />
                   </div>
                   <div className="field">
-                    <label htmlFor="unmatched_vehicle_year">Year</label>
-                    <input id="unmatched_vehicle_year" name="unmatched_vehicle_year" type="number" min="1900" max="2100" />
+                    <label htmlFor="uv_model">Model</label>
+                    <input
+                      id="uv_model"
+                      value={unmatchedModel}
+                      onChange={(e) => setUnmatchedModel(e.target.value)}
+                      required
+                    />
                   </div>
                   <div className="field">
-                    <label htmlFor="unmatched_vehicle_make">Make</label>
-                    <input id="unmatched_vehicle_make" name="unmatched_vehicle_make" />
+                    <label htmlFor="uv_year">Year</label>
+                    <input
+                      id="uv_year"
+                      type="number"
+                      min="1900"
+                      max="2100"
+                      value={unmatchedYear}
+                      onChange={(e) => setUnmatchedYear(e.target.value)}
+                    />
                   </div>
                   <div className="field">
-                    <label htmlFor="unmatched_vehicle_stock_number">Stock Number</label>
-                    <input id="unmatched_vehicle_stock_number" name="unmatched_vehicle_stock_number" />
+                    <label htmlFor="uv_stock">Stock Number <span className="muted">(optional)</span></label>
+                    <input
+                      id="uv_stock"
+                      value={unmatchedStockNumber}
+                      onChange={(e) => setUnmatchedStockNumber(e.target.value)}
+                    />
                   </div>
+                  <p className="field-hint" style={{ gridColumn: "1 / -1" }}>
+                    VIN + Make + Model are required to auto-create the vehicle record.
+                  </p>
                 </div>
               ) : null}
             </>
@@ -397,14 +499,51 @@ export function IntakeWizard() {
         <section className="wizard-panel">
           <h3>Upload and finish</h3>
           <div className="form-grid">
-            <div className="field">
-              <label htmlFor="transaction_date">Transaction Date</label>
-              <input id="transaction_date" name="transaction_date" type="date" />
+            <div className="field full">
+              <label htmlFor="document">Receipt or PDF</label>
+              <p className="field-hint">Upload an image receipt to auto-fill the fields below.</p>
+              <input
+                id="document"
+                name="document"
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={handleFileChange}
+              />
+              {ocrLoading && <p className="ocr-scanning">Scanning receipt…</p>}
+              {!ocrLoading && ocrVendor && (
+                <p className="ocr-scanning">Detected vendor: <strong>{ocrVendor}</strong></p>
+              )}
             </div>
 
             <div className="field">
-              <label htmlFor="amount">Amount</label>
-              <input id="amount" name="amount" type="number" min="0" step="0.01" placeholder="0.00" />
+              <div className="ocr-label-row">
+                <label htmlFor="transaction_date">Transaction Date</label>
+                {ocrFilled.has("date") && <span className="ocr-chip">from receipt</span>}
+              </div>
+              <input
+                id="transaction_date"
+                name="transaction_date"
+                type="date"
+                value={transactionDate}
+                onChange={(e) => setTransactionDate(e.target.value)}
+              />
+            </div>
+
+            <div className="field">
+              <div className="ocr-label-row">
+                <label htmlFor="amount">Amount</label>
+                {ocrFilled.has("amount") && <span className="ocr-chip">from receipt</span>}
+              </div>
+              <input
+                id="amount"
+                name="amount"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
             </div>
 
             <div className="field full">
@@ -419,20 +558,26 @@ export function IntakeWizard() {
             </div>
 
             <div className="field full">
-              <label htmlFor="document">Receipt or PDF</label>
-              <input id="document" name="document" type="file" accept="image/*,application/pdf" />
-            </div>
-
-            <div className="field full">
-              <label htmlFor="memo">Notes</label>
-              <textarea id="memo" name="memo" placeholder="Add vendor, customer, payment, or context details." />
+              <div className="ocr-label-row">
+                <label htmlFor="memo">Notes</label>
+                {ocrFilled.has("memo") && <span className="ocr-chip">from receipt</span>}
+              </div>
+              <textarea
+                id="memo"
+                name="memo"
+                placeholder="Add vendor, customer, payment, or context details."
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+              />
             </div>
           </div>
 
           <div className="summary-line">
             <strong>Summary:</strong> {businessCluster} {businessCluster === "repair" ? `/ ${repairContext}` : ""} / {direction}
             {selectedVehicle ? ` / ${vehicleLabel(selectedVehicle)}` : ""}
-            {manualVehicleMode ? " / unmatched vehicle entered manually" : ""}
+            {manualVehicleMode
+              ? ` / New vehicle: ${[unmatchedYear, unmatchedMake, unmatchedModel, unmatchedVin].filter(Boolean).join(" ") || "details entered"}`
+              : ""}
           </div>
 
           <div className="actions">

@@ -17,6 +17,15 @@ function adminRedirectWithError(message: string): never {
   redirect(`/admin/submissions?error=${encodeURIComponent(message)}`);
 }
 
+function vehicleBusinessUseForSubmission(businessCluster: string, repairContext: string | null) {
+  if (businessCluster === "rental") return "rental";
+  if (businessCluster === "retail") return "retail";
+  if (businessCluster === "repair" && repairContext === "rental_vehicle") return "rental";
+  if (businessCluster === "repair" && repairContext === "retail_inventory") return "retail";
+  if (businessCluster === "repair") return "repair_shop";
+  return null;
+}
+
 async function requireReviewer(): Promise<ReviewerProfile> {
   const supabase = await createClient();
   const {
@@ -113,7 +122,7 @@ export async function postSubmission(formData: FormData) {
   const { data: submission, error: loadError } = await supabase
     .from("intake_submissions")
     .select(
-      "submission_id,submission_number,business_cluster,repair_context,direction,status,vehicle_id,transaction_date,amount,memo,counterparty_name,vehicle_cost_ledger_entry_id,general_ledger_entry_id",
+      "submission_id,submission_number,business_cluster,repair_context,direction,status,vehicle_id,unmatched_vehicle_vin,unmatched_vehicle_year,unmatched_vehicle_make,unmatched_vehicle_model,unmatched_vehicle_stock_number,transaction_date,amount,memo,counterparty_name,vehicle_cost_ledger_entry_id,general_ledger_entry_id",
     )
     .eq("submission_id", submissionId)
     .maybeSingle();
@@ -134,16 +143,70 @@ export async function postSubmission(formData: FormData) {
     adminRedirectWithError("This submission has already been posted.");
   }
 
+  // Resolve vehicle_id from unmatched data if the intake flow didn't link one
+  let resolvedVehicleId: number | null = submission.vehicle_id;
+
+  if (resolvedVehicleId === null && submission.business_cluster !== "general" && submission.unmatched_vehicle_vin) {
+    const { data: existing } = await supabase
+      .from("vehicles")
+      .select("vehicle_id")
+      .eq("vin", submission.unmatched_vehicle_vin)
+      .maybeSingle();
+
+    if (existing) {
+      resolvedVehicleId = existing.vehicle_id;
+    } else if (
+      submission.unmatched_vehicle_vin.length >= 11 &&
+      submission.unmatched_vehicle_vin.length <= 17 &&
+      submission.unmatched_vehicle_make &&
+      submission.unmatched_vehicle_model
+    ) {
+      const stockNumber =
+        submission.unmatched_vehicle_stock_number ||
+        `MAN-${submission.unmatched_vehicle_vin.slice(-8).toUpperCase()}`;
+
+      const { data: created, error: vehicleError } = await supabase
+        .from("vehicles")
+        .insert({
+          vin: submission.unmatched_vehicle_vin,
+          stock_number: stockNumber,
+          year: submission.unmatched_vehicle_year ?? null,
+          make: submission.unmatched_vehicle_make,
+          model: submission.unmatched_vehicle_model,
+          purchase_date: new Date().toISOString().split("T")[0],
+          status: "IN_INVENTORY",
+          business_use: vehicleBusinessUseForSubmission(submission.business_cluster, submission.repair_context),
+        })
+        .select("vehicle_id")
+        .single();
+
+      if (vehicleError) adminRedirectWithError(`Could not create vehicle: ${vehicleError.message}`);
+      if (created) resolvedVehicleId = created.vehicle_id;
+    }
+
+    if (resolvedVehicleId) {
+      await supabase
+        .from("intake_submissions")
+        .update({ vehicle_id: resolvedVehicleId })
+        .eq("submission_id", submissionId);
+    }
+  }
+
   if (submission.business_cluster !== "general") {
-    if (!submission.vehicle_id) {
-      adminRedirectWithError("Match this submission to a vehicle before posting.");
+    if (!resolvedVehicleId) {
+      const vin = submission.unmatched_vehicle_vin ?? "(none)";
+      adminRedirectWithError(
+        `No vehicle linked to this submission (stored VIN: ${vin}). ` +
+        `Approve/posting can create the vehicle only when VIN, Make, and Model are present. ` +
+        `Ask the employee for missing vehicle details or link this submission to an existing vehicle before posting.`
+      );
     }
 
     const category = submission.business_cluster === "repair" ? "REPAIR" : "OTHER_DIRECT_COST";
     const { data: ledgerEntry, error: ledgerError } = await supabase
       .from("vehicle_cost_ledger")
       .insert({
-        vehicle_id: submission.vehicle_id,
+        vehicle_id: resolvedVehicleId,
         entry_date: submission.transaction_date,
         entry_type: submission.direction === "income" ? "SALE" : "DIRECT_COST",
         category: submission.direction === "income" ? "SALE_PROCEEDS" : category,
@@ -210,4 +273,93 @@ export async function postSubmission(formData: FormData) {
   revalidatePath("/admin/submissions");
   revalidatePath("/");
   redirect("/admin/submissions");
+}
+
+export async function deleteSubmission(formData: FormData) {
+  await requireReviewer();
+  const supabase = await createClient();
+  const submissionId = cleanString(formData.get("submission_id"));
+
+  if (!submissionId) {
+    adminRedirectWithError("Missing submission ID.");
+  }
+
+  const { error } = await supabase
+    .from("intake_submissions")
+    .delete()
+    .eq("submission_id", submissionId)
+    .in("status", ["draft", "submitted", "in_review", "approved", "rejected"]);
+
+  if (error) {
+    adminRedirectWithError(error.message);
+  }
+
+  revalidatePath("/admin/submissions");
+  redirect("/admin/submissions");
+}
+
+export async function linkVehicleToSubmission(submissionId: string, vehicleId: number): Promise<{ error?: string }> {
+  await requireReviewer();
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("intake_submissions")
+    .update({ vehicle_id: vehicleId })
+    .eq("submission_id", submissionId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin/submissions");
+  return {};
+}
+
+export async function batchApproveResult(submissionIds: string[]): Promise<{ error?: string }> {
+  const reviewer = await requireReviewer();
+  const supabase = await createClient();
+
+  if (!submissionIds.length) {
+    return { error: "No submissions selected." };
+  }
+
+  const { error } = await supabase
+    .from("intake_submissions")
+    .update({
+      status: "approved",
+      reviewed_by: reviewer.profile_id,
+      reviewed_at: new Date().toISOString(),
+      rejection_reason: null,
+    })
+    .in("submission_id", submissionIds)
+    .in("status", ["submitted", "in_review"]);
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin/submissions");
+  return {};
+}
+
+export async function batchRejectResult(submissionIds: string[], reason: string): Promise<{ error?: string }> {
+  const reviewer = await requireReviewer();
+  const supabase = await createClient();
+
+  if (!submissionIds.length) {
+    return { error: "No submissions selected." };
+  }
+
+  if (!reason.trim()) {
+    return { error: "Rejection reason is required." };
+  }
+
+  const { error } = await supabase
+    .from("intake_submissions")
+    .update({
+      status: "rejected",
+      rejection_reason: reason.trim(),
+      reviewed_by: reviewer.profile_id,
+      reviewed_at: new Date().toISOString(),
+    })
+    .in("submission_id", submissionIds)
+    .in("status", ["submitted", "in_review", "approved"]);
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin/submissions");
+  return {};
 }

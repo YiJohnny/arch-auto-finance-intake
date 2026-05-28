@@ -6,6 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .DS_Store
+tsconfig.tsbuildinfo
 *.docx
 compnay_logo.png
 public/company_logo.png

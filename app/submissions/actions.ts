@@ -99,9 +99,17 @@ export async function saveDraftSubmission(formData: FormData) {
     redirectWithError("Enter a valid vehicle year.");
   }
 
-  if (needsVehicleInfo && vehicleId === null && (!unmatchedVehicleVin || !unmatchedVehicleModel)) {
-    redirectWithError("Select a vehicle or manually enter at least VIN Number and Model.");
+  if (needsVehicleInfo && vehicleId === null && (!unmatchedVehicleVin || !unmatchedVehicleMake || !unmatchedVehicleModel)) {
+    redirectWithError("Select a vehicle or manually enter VIN, Make, and Model.");
   }
+
+  if (needsVehicleInfo && vehicleId === null && unmatchedVehicleVin) {
+    if (unmatchedVehicleVin.length < 11 || unmatchedVehicleVin.length > 17) {
+      redirectWithError(`VIN must be 11–17 characters (you entered ${unmatchedVehicleVin.length}). Please go back and correct it.`);
+    }
+  }
+
+  const resolvedVehicleId: number | null = vehicleId;
 
   const { data: submission, error: submissionError } = await supabase
     .from("intake_submissions")
@@ -111,12 +119,12 @@ export async function saveDraftSubmission(formData: FormData) {
       repair_context: repairContext,
       direction,
       status,
-      vehicle_id: vehicleId,
-      unmatched_vehicle_vin: vehicleId ? null : unmatchedVehicleVin || null,
-      unmatched_vehicle_year: vehicleId ? null : unmatchedVehicleYear,
-      unmatched_vehicle_make: vehicleId ? null : unmatchedVehicleMake || null,
-      unmatched_vehicle_model: vehicleId ? null : unmatchedVehicleModel || null,
-      unmatched_vehicle_stock_number: vehicleId ? null : unmatchedVehicleStockNumber || null,
+      vehicle_id: resolvedVehicleId,
+      unmatched_vehicle_vin: resolvedVehicleId ? null : unmatchedVehicleVin || null,
+      unmatched_vehicle_year: resolvedVehicleId ? null : unmatchedVehicleYear,
+      unmatched_vehicle_make: resolvedVehicleId ? null : unmatchedVehicleMake || null,
+      unmatched_vehicle_model: resolvedVehicleId ? null : unmatchedVehicleModel || null,
+      unmatched_vehicle_stock_number: resolvedVehicleId ? null : unmatchedVehicleStockNumber || null,
       transaction_date: transactionDate || null,
       amount,
       payment_method: paymentMethod || null,

@@ -1,98 +1,32 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { approveSubmission, postSubmission, rejectSubmission } from "@/app/admin/actions";
 import { signOut } from "@/app/auth/actions";
 import { BrandHeader } from "@/app/components/brand-header";
+import { SubmissionsTable, type IntakeSubmission, type DocumentLink } from "@/app/components/submissions-table";
 import { createClient } from "@/utils/supabase/server";
 
 type AdminSubmissionsPageProps = {
   searchParams?: Promise<{
     error?: string;
+    tab?: string;
   }>;
 };
 
-type IntakeSubmission = {
-  submission_id: string;
-  submission_number: number;
-  business_cluster: string;
-  repair_context: string | null;
-  direction: string;
-  status: string;
-  vehicle_id: number | null;
-  unmatched_vehicle_vin: string | null;
-  unmatched_vehicle_year: number | null;
-  unmatched_vehicle_make: string | null;
-  unmatched_vehicle_model: string | null;
-  unmatched_vehicle_stock_number: string | null;
-  transaction_date: string | null;
-  amount: number | null;
-  memo: string | null;
-  rejection_reason: string | null;
-  created_at: string;
-  app_profiles: {
-    full_name: string | null;
-    email: string | null;
-  } | null;
-  vehicles: {
-    stock_number: string | null;
-    vin: string | null;
-    year: number | null;
-    make: string | null;
-    model: string | null;
-  } | null;
-  intake_documents: Array<{
-    file_name: string;
-    storage_path: string;
-  }>;
-};
+const TAB_CONFIG = [
+  { key: "pending", label: "Pending", statuses: ["submitted", "in_review"] },
+  { key: "approved", label: "Approved", statuses: ["approved"] },
+  { key: "posted", label: "Posted", statuses: ["posted"] },
+  { key: "rejected", label: "Rejected", statuses: ["rejected"] },
+] as const;
 
-type DocumentLink = {
-  file_name: string;
-  signed_url: string | null;
-};
-
-function money(amount: number | null) {
-  if (amount === null) {
-    return "No amount";
-  }
-
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
-}
-
-function vehicleSummary(submission: IntakeSubmission) {
-  if (submission.vehicles) {
-    return [
-      submission.vehicles.stock_number ? `#${submission.vehicles.stock_number}` : null,
-      submission.vehicles.year,
-      submission.vehicles.make,
-      submission.vehicles.model,
-      submission.vehicles.vin ? `VIN ${submission.vehicles.vin}` : null,
-    ]
-      .filter(Boolean)
-      .join(" ");
-  }
-
-  if (submission.unmatched_vehicle_vin || submission.unmatched_vehicle_model) {
-    return [
-      "Unmatched:",
-      submission.unmatched_vehicle_stock_number ? `#${submission.unmatched_vehicle_stock_number}` : null,
-      submission.unmatched_vehicle_year,
-      submission.unmatched_vehicle_make,
-      submission.unmatched_vehicle_model,
-      submission.unmatched_vehicle_vin ? `VIN ${submission.unmatched_vehicle_vin}` : null,
-    ]
-      .filter(Boolean)
-      .join(" ");
-  }
-
-  return "No vehicle";
-}
+type TabKey = (typeof TAB_CONFIG)[number]["key"];
 
 export default async function AdminSubmissionsPage({ searchParams }: AdminSubmissionsPageProps) {
   const params = await searchParams;
+  const rawTab = params?.tab ?? "pending";
+  const tabConfig = TAB_CONFIG.find((t) => t.key === rawTab) ?? TAB_CONFIG[0];
+  const tab = tabConfig.key as TabKey;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -117,28 +51,25 @@ export default async function AdminSubmissionsPage({ searchParams }: AdminSubmis
     .select(
       "submission_id,submission_number,business_cluster,repair_context,direction,status,vehicle_id,unmatched_vehicle_vin,unmatched_vehicle_year,unmatched_vehicle_make,unmatched_vehicle_model,unmatched_vehicle_stock_number,transaction_date,amount,memo,rejection_reason,created_at,app_profiles:submitted_by(full_name,email),vehicles(vehicle_id,stock_number,vin,year,make,model),intake_documents(file_name,storage_path)",
     )
-    .in("status", ["submitted", "approved", "rejected"])
+    .in("status", [...tabConfig.statuses])
     .order("created_at", { ascending: false })
-    .limit(50)
+    .limit(100)
     .returns<IntakeSubmission[]>();
 
-  const documentLinksBySubmission = new Map<string, DocumentLink[]>();
+  const documentLinksBySubmission: Record<string, DocumentLink[]> = {};
 
   if (submissions) {
     await Promise.all(
       submissions.map(async (submission) => {
         const links = await Promise.all(
-          submission.intake_documents.map(async (document) => {
-            const { data } = await supabase.storage.from("intake-documents").createSignedUrl(document.storage_path, 60 * 10);
-
-            return {
-              file_name: document.file_name,
-              signed_url: data?.signedUrl ?? null,
-            };
+          submission.intake_documents.map(async (doc) => {
+            const { data } = await supabase.storage
+              .from("intake-documents")
+              .createSignedUrl(doc.storage_path, 60 * 10);
+            return { file_name: doc.file_name, signed_url: data?.signedUrl ?? null };
           }),
         );
-
-        documentLinksBySubmission.set(submission.submission_id, links);
+        documentLinksBySubmission[submission.submission_id] = links;
       }),
     );
   }
@@ -147,7 +78,10 @@ export default async function AdminSubmissionsPage({ searchParams }: AdminSubmis
     <main className="shell">
       <div className="workspace">
         <header className="topbar">
-          <BrandHeader title="Submission Review" subtitle="Approve, reject, and post employee finance submissions." />
+          <BrandHeader
+            title="Submission Review"
+            subtitle="Approve, reject, and post employee finance submissions."
+          />
           <div className="profile-chip">
             <div>
               <strong>{profile.full_name ?? profile.email ?? user.email}</strong>
@@ -167,79 +101,28 @@ export default async function AdminSubmissionsPage({ searchParams }: AdminSubmis
 
         {params?.error ? <p className="notice">{params.error}</p> : null}
 
+        <div className="status-tabs">
+          {TAB_CONFIG.map((t) => (
+            <Link
+              key={t.key}
+              href={`/admin/submissions?tab=${t.key}`}
+              className={tab === t.key ? "status-tab active" : "status-tab"}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </div>
+
         <section className="panel">
-          <h2>Review Queue</h2>
-          {error ? <p className="notice">{error.message}</p> : null}
-          {!error && (!submissions || submissions.length === 0) ? <p className="muted">No submissions need review.</p> : null}
-
-          {submissions && submissions.length > 0 ? (
-            <div className="review-list">
-              {submissions.map((submission) => (
-                <article className="review-item" key={submission.submission_id}>
-                  <div className="review-main">
-                    <div>
-                      <strong>#{submission.submission_number}</strong>
-                      <span className="badge">{submission.status}</span>
-                    </div>
-                    <p>
-                      {submission.business_cluster}
-                      {submission.repair_context ? ` / ${submission.repair_context}` : ""} / {submission.direction}
-                    </p>
-                    <p>{money(submission.amount)} {submission.transaction_date ? `on ${submission.transaction_date}` : ""}</p>
-                    <p className="muted">Submitted by {submission.app_profiles?.full_name ?? submission.app_profiles?.email ?? "Unknown"}</p>
-                    <p className="muted">{vehicleSummary(submission)}</p>
-                    {submission.memo ? <p>{submission.memo}</p> : null}
-                    {documentLinksBySubmission.get(submission.submission_id)?.length ? (
-                      <div className="document-links">
-                        {documentLinksBySubmission.get(submission.submission_id)?.map((document) =>
-                          document.signed_url ? (
-                            <a href={document.signed_url} key={document.file_name} rel="noreferrer" target="_blank">
-                              View {document.file_name}
-                            </a>
-                          ) : (
-                            <span className="muted" key={document.file_name}>
-                              {document.file_name}
-                            </span>
-                          ),
-                        )}
-                      </div>
-                    ) : null}
-                    {submission.rejection_reason ? <p className="notice">{submission.rejection_reason}</p> : null}
-                  </div>
-
-                  <div className="review-actions">
-                    {submission.status === "submitted" ? (
-                      <form action={approveSubmission}>
-                        <input type="hidden" name="submission_id" value={submission.submission_id} />
-                        <button className="button" type="submit">
-                          Approve
-                        </button>
-                      </form>
-                    ) : null}
-
-                    {submission.status === "approved" ? (
-                      <form action={postSubmission}>
-                        <input type="hidden" name="submission_id" value={submission.submission_id} />
-                        <button className="button" type="submit">
-                          Post to Ledger
-                        </button>
-                      </form>
-                    ) : null}
-
-                    {submission.status !== "rejected" ? (
-                      <form action={rejectSubmission} className="reject-form">
-                        <input type="hidden" name="submission_id" value={submission.submission_id} />
-                        <textarea name="rejection_reason" placeholder="Rejection reason" required />
-                        <button className="button danger" type="submit">
-                          Reject
-                        </button>
-                      </form>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : null}
+          {error ? (
+            <p className="notice">{error.message}</p>
+          ) : (
+            <SubmissionsTable
+              submissions={submissions ?? []}
+              documentLinks={documentLinksBySubmission}
+              tab={tab}
+            />
+          )}
         </section>
       </div>
     </main>
