@@ -49,7 +49,7 @@ export default async function AdminSubmissionsPage({ searchParams }: AdminSubmis
   const { data: submissions, error } = await supabase
     .from("intake_submissions")
     .select(
-      "submission_id,submission_number,business_cluster,repair_context,direction,status,vehicle_id,unmatched_vehicle_vin,unmatched_vehicle_year,unmatched_vehicle_make,unmatched_vehicle_model,unmatched_vehicle_stock_number,transaction_date,amount,memo,rejection_reason,created_at,app_profiles:submitted_by(full_name,email),vehicles(vehicle_id,stock_number,vin,year,make,model),intake_documents(file_name,storage_path)",
+      "submission_id,submission_number,business_cluster,repair_context,direction,status,vehicle_id,unmatched_vehicle_vin,unmatched_vehicle_year,unmatched_vehicle_make,unmatched_vehicle_model,unmatched_vehicle_stock_number,transaction_date,amount,memo,ai_suggested_category,ai_suggested_vendor,accounting_category,rejection_reason,created_at,app_profiles:submitted_by(full_name,email),vehicles(vehicle_id,stock_number,vin,year,make,model),intake_documents(file_name,storage_path)",
     )
     .in("status", [...tabConfig.statuses])
     .order("created_at", { ascending: false })
@@ -97,6 +97,7 @@ export default async function AdminSubmissionsPage({ searchParams }: AdminSubmis
 
         <div className="admin-nav">
           <Link href="/">New Submission</Link>
+          <Link href="/admin/cash">Store Cash</Link>
         </div>
 
         {params?.error ? <p className="notice">{params.error}</p> : null}

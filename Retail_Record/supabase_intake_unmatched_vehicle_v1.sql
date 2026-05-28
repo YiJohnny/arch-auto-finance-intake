@@ -30,3 +30,9 @@ add column if not exists business_use text
 
 create index if not exists idx_vehicles_business_use
     on public.vehicles(business_use);
+
+alter table public.vehicles
+add column if not exists fund_allocation text;
+
+create index if not exists idx_vehicles_fund_allocation
+    on public.vehicles(fund_allocation);

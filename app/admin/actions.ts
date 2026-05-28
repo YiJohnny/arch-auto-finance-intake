@@ -9,12 +9,61 @@ type ReviewerProfile = {
   role: string;
 };
 
+const vehicleExpenseCategories = new Set([
+  "AUCTION_FEE",
+  "BUYER_FEE",
+  "TRANSPORTATION",
+  "TOWING",
+  "FUEL",
+  "TITLE_FEE",
+  "REGISTRATION_FEE",
+  "INSPECTION",
+  "SMOG",
+  "REPAIR",
+  "PARTS",
+  "DETAIL",
+  "CLEANING",
+  "PHOTOGRAPHY",
+  "KEY_REPLACEMENT",
+  "WARRANTY_REPAIR",
+  "OTHER_DIRECT_COST",
+]);
+
+const generalAccountingCategories = new Set([
+  "RENT",
+  "INSURANCE",
+  "LEGAL_ACCOUNTING",
+  "OFFICE_SUPPLIES",
+  "UTILITIES",
+  "BANK_FEES",
+  "DELIVERY_FREIGHT",
+  "LAUNDRY_UNIFORMS",
+  "OUTSIDE_SERVICES",
+  "SMALL_TOOLS_SUPPLIES",
+  "TRAVEL",
+  "MEALS_ENTERTAINMENT",
+  "COMPENSATION",
+  "EMPLOYEE_BENEFITS",
+  "WORKERS_COMPENSATION",
+  "ADVERTISING",
+  "SALES_PROMOTION",
+  "FLOORPLAN_INTEREST",
+  "BAD_DEBT",
+  "REIMBURSEMENT",
+  "OTHER_INCOME",
+  "MISCELLANEOUS",
+]);
+
 function cleanString(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
 }
 
 function adminRedirectWithError(message: string): never {
   redirect(`/admin/submissions?error=${encodeURIComponent(message)}`);
+}
+
+function cashRedirectWithError(message: string): never {
+  redirect(`/admin/cash?error=${encodeURIComponent(message)}`);
 }
 
 function vehicleBusinessUseForSubmission(businessCluster: string, repairContext: string | null) {
@@ -47,6 +96,43 @@ async function requireReviewer(): Promise<ReviewerProfile> {
   }
 
   return profile;
+}
+
+async function postStoreCashMovement({
+  supabase,
+  reviewerId,
+  entryDate,
+  direction,
+  amount,
+  category,
+  description,
+  sourceSystem = "MANUAL",
+  sourceRecordId,
+}: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  reviewerId: string;
+  entryDate: string;
+  direction: "in" | "out";
+  amount: number;
+  category: string;
+  description: string;
+  sourceSystem?: string;
+  sourceRecordId?: string;
+}) {
+  return supabase.from("cash_account_ledger").upsert(
+    {
+      entry_date: entryDate,
+      cash_account: "store_cash",
+      direction,
+      amount,
+      category,
+      description,
+      source_system: sourceSystem,
+      source_record_id: sourceRecordId ?? null,
+      created_by: reviewerId,
+    },
+    { onConflict: "source_system,source_record_id" },
+  );
 }
 
 export async function approveSubmission(formData: FormData) {
@@ -114,6 +200,7 @@ export async function postSubmission(formData: FormData) {
   const reviewer = await requireReviewer();
   const supabase = await createClient();
   const submissionId = cleanString(formData.get("submission_id"));
+  const accountingCategory = cleanString(formData.get("accounting_category"));
 
   if (!submissionId) {
     adminRedirectWithError("Missing submission ID.");
@@ -122,7 +209,7 @@ export async function postSubmission(formData: FormData) {
   const { data: submission, error: loadError } = await supabase
     .from("intake_submissions")
     .select(
-      "submission_id,submission_number,business_cluster,repair_context,direction,status,vehicle_id,unmatched_vehicle_vin,unmatched_vehicle_year,unmatched_vehicle_make,unmatched_vehicle_model,unmatched_vehicle_stock_number,transaction_date,amount,memo,counterparty_name,vehicle_cost_ledger_entry_id,general_ledger_entry_id",
+      "submission_id,submission_number,business_cluster,repair_context,direction,status,vehicle_id,unmatched_vehicle_vin,unmatched_vehicle_year,unmatched_vehicle_make,unmatched_vehicle_model,unmatched_vehicle_stock_number,transaction_date,amount,payment_method,memo,counterparty_name,vehicle_cost_ledger_entry_id,general_ledger_entry_id",
     )
     .eq("submission_id", submissionId)
     .maybeSingle();
@@ -141,6 +228,10 @@ export async function postSubmission(formData: FormData) {
 
   if (submission.vehicle_cost_ledger_entry_id || submission.general_ledger_entry_id) {
     adminRedirectWithError("This submission has already been posted.");
+  }
+
+  if (!accountingCategory) {
+    adminRedirectWithError("Choose an accounting category before posting.");
   }
 
   // Resolve vehicle_id from unmatched data if the intake flow didn't link one
@@ -202,14 +293,24 @@ export async function postSubmission(formData: FormData) {
       );
     }
 
-    const category = submission.business_cluster === "repair" ? "REPAIR" : "OTHER_DIRECT_COST";
+    const ledgerCategory =
+      submission.direction === "income" ? "SALE_PROCEEDS" : accountingCategory;
+
+    if (submission.direction === "expense" && !vehicleExpenseCategories.has(ledgerCategory)) {
+      adminRedirectWithError("Choose a valid vehicle ledger category before posting.");
+    }
+
+    if (submission.direction === "income" && ledgerCategory !== "SALE_PROCEEDS") {
+      adminRedirectWithError("Vehicle income must post as SALE_PROCEEDS.");
+    }
+
     const { data: ledgerEntry, error: ledgerError } = await supabase
       .from("vehicle_cost_ledger")
       .insert({
         vehicle_id: resolvedVehicleId,
         entry_date: submission.transaction_date,
         entry_type: submission.direction === "income" ? "SALE" : "DIRECT_COST",
-        category: submission.direction === "income" ? "SALE_PROCEEDS" : category,
+        category: ledgerCategory,
         amount: submission.amount,
         description: submission.memo ?? `Intake submission #${submission.submission_number}`,
         vendor_name: submission.counterparty_name,
@@ -223,11 +324,30 @@ export async function postSubmission(formData: FormData) {
       adminRedirectWithError(ledgerError?.message ?? "Could not post vehicle ledger entry.");
     }
 
+    if (submission.payment_method === "store_cash") {
+      const { error: cashError } = await postStoreCashMovement({
+        supabase,
+        reviewerId: reviewer.profile_id,
+        entryDate: submission.transaction_date,
+        direction: submission.direction === "income" ? "in" : "out",
+        amount: submission.amount,
+        category: submission.direction === "income" ? "INCOME_DEPOSIT" : "EXPENSE_PAYMENT",
+        description: submission.memo ?? `Store cash for intake submission #${submission.submission_number}`,
+        sourceSystem: "INTAKE",
+        sourceRecordId: submission.submission_id,
+      });
+
+      if (cashError) {
+        adminRedirectWithError(cashError.message);
+      }
+    }
+
     const { error: updateError } = await supabase
       .from("intake_submissions")
       .update({
         status: "posted",
         posted_at: new Date().toISOString(),
+        accounting_category: ledgerCategory,
         vehicle_cost_ledger_entry_id: ledgerEntry.ledger_entry_id,
       })
       .eq("submission_id", submission.submission_id);
@@ -236,12 +356,17 @@ export async function postSubmission(formData: FormData) {
       adminRedirectWithError(updateError.message);
     }
   } else {
+    if (!generalAccountingCategories.has(accountingCategory)) {
+      adminRedirectWithError("Choose a valid general ledger category before posting.");
+    }
+
     const { data: generalEntry, error: generalError } = await supabase
       .from("general_ledger_entries")
       .insert({
         entry_date: submission.transaction_date,
         business_cluster: submission.business_cluster,
         direction: submission.direction,
+        accounting_category: accountingCategory,
         amount: submission.amount,
         description: submission.memo ?? `Intake submission #${submission.submission_number}`,
         counterparty_name: submission.counterparty_name,
@@ -256,11 +381,30 @@ export async function postSubmission(formData: FormData) {
       adminRedirectWithError(generalError?.message ?? "Could not post general ledger entry.");
     }
 
+    if (submission.payment_method === "store_cash") {
+      const { error: cashError } = await postStoreCashMovement({
+        supabase,
+        reviewerId: reviewer.profile_id,
+        entryDate: submission.transaction_date,
+        direction: submission.direction === "income" ? "in" : "out",
+        amount: submission.amount,
+        category: submission.direction === "income" ? "INCOME_DEPOSIT" : "EXPENSE_PAYMENT",
+        description: submission.memo ?? `Store cash for intake submission #${submission.submission_number}`,
+        sourceSystem: "INTAKE",
+        sourceRecordId: submission.submission_id,
+      });
+
+      if (cashError) {
+        adminRedirectWithError(cashError.message);
+      }
+    }
+
     const { error: updateError } = await supabase
       .from("intake_submissions")
       .update({
         status: "posted",
         posted_at: new Date().toISOString(),
+        accounting_category: accountingCategory,
         general_ledger_entry_id: generalEntry.general_ledger_entry_id,
       })
       .eq("submission_id", submission.submission_id);
@@ -273,6 +417,65 @@ export async function postSubmission(formData: FormData) {
   revalidatePath("/admin/submissions");
   revalidatePath("/");
   redirect("/admin/submissions");
+}
+
+export async function createCashLedgerEntry(formData: FormData) {
+  const reviewer = await requireReviewer();
+  const supabase = await createClient();
+  const entryDate = cleanString(formData.get("entry_date"));
+  const direction = cleanString(formData.get("direction"));
+  const amountText = cleanString(formData.get("amount"));
+  const category = cleanString(formData.get("category"));
+  const description = cleanString(formData.get("description"));
+
+  const allowedDirections = new Set(["in", "out"]);
+  const allowedCategories = new Set([
+    "CASH_TRANSFER_IN",
+    "CASH_TRANSFER_OUT",
+    "REIMBURSEMENT_PAYMENT",
+    "INCOME_DEPOSIT",
+    "CASH_ADJUSTMENT",
+  ]);
+  const amount = amountText ? Number(amountText) : null;
+
+  if (!entryDate) {
+    cashRedirectWithError("Entry date is required.");
+  }
+
+  if (!allowedDirections.has(direction)) {
+    cashRedirectWithError("Choose cash in or cash out.");
+  }
+
+  if (!amount || !Number.isFinite(amount) || amount <= 0) {
+    cashRedirectWithError("Enter a valid positive amount.");
+  }
+
+  if (!allowedCategories.has(category)) {
+    cashRedirectWithError("Choose a valid cash category.");
+  }
+
+  if (!description) {
+    cashRedirectWithError("Description is required.");
+  }
+
+  const { error } = await postStoreCashMovement({
+    supabase,
+    reviewerId: reviewer.profile_id,
+    entryDate,
+    direction: direction as "in" | "out",
+    amount,
+    category,
+    description,
+    sourceSystem: "MANUAL",
+    sourceRecordId: crypto.randomUUID(),
+  });
+
+  if (error) {
+    cashRedirectWithError(error.message);
+  }
+
+  revalidatePath("/admin/cash");
+  redirect("/admin/cash");
 }
 
 export async function deleteSubmission(formData: FormData) {

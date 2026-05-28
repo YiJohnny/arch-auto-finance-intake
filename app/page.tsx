@@ -57,6 +57,7 @@ export default async function Page({ searchParams }: HomePageProps) {
         {profile && ["manager", "accountant", "admin"].includes(profile.role) ? (
           <div className="admin-nav">
             <Link href="/admin/submissions">Review Submissions</Link>
+            <Link href="/admin/cash">Store Cash</Link>
           </div>
         ) : null}
 

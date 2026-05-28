@@ -43,6 +43,8 @@ export async function saveDraftSubmission(formData: FormData) {
   const amountText = cleanString(formData.get("amount"));
   const paymentMethod = cleanString(formData.get("payment_method"));
   const memo = cleanString(formData.get("memo"));
+  const aiSuggestedCategory = cleanString(formData.get("ai_suggested_category"));
+  const aiSuggestedVendor = cleanString(formData.get("ai_suggested_vendor"));
   const intent = cleanString(formData.get("intent"));
   const vehicleIdText = cleanString(formData.get("vehicle_id"));
   const unmatchedVehicleVin = cleanString(formData.get("unmatched_vehicle_vin"));
@@ -54,6 +56,7 @@ export async function saveDraftSubmission(formData: FormData) {
   const status = intent === "submit" ? "submitted" : "draft";
   const allowedPaymentMethods = new Set([
     "self_paid",
+    "store_cash",
     "visa_1209",
     "visa_2829",
     "visa_3173",
@@ -129,6 +132,8 @@ export async function saveDraftSubmission(formData: FormData) {
       amount,
       payment_method: paymentMethod || null,
       memo: memo || null,
+      ai_suggested_category: aiSuggestedCategory || null,
+      ai_suggested_vendor: aiSuggestedVendor || null,
     })
     .select("submission_id")
     .single();

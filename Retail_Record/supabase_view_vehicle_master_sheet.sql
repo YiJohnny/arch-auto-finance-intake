@@ -38,6 +38,8 @@ select
     v.mileage,
     v.purchase_date,
     v.purchase_source,
+    v.business_use,
+    v.fund_allocation,
     v.status,
     v.sale_date,
     v.sale_price,

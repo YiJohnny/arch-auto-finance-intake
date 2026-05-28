@@ -35,6 +35,7 @@ const repairContexts = [
 
 const paymentMethods = [
   { value: "self_paid", label: "Self Paid" },
+  { value: "store_cash", label: "Store Cash" },
   { value: "visa_1209", label: "Visa 1209" },
   { value: "visa_2829", label: "Visa 2829" },
   { value: "visa_3173", label: "Visa 3173" },
@@ -79,6 +80,7 @@ export function IntakeWizard() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrFilled, setOcrFilled] = useState<Set<string>>(new Set());
   const [ocrVendor, setOcrVendor] = useState<string | null>(null);
+  const [ocrCategory, setOcrCategory] = useState<string | null>(null);
 
   // Manual vehicle state — persisted across steps via hidden inputs
   const [unmatchedVin, setUnmatchedVin] = useState("");
@@ -103,6 +105,7 @@ export function IntakeWizard() {
     setOcrLoading(true);
     setOcrFilled(new Set());
     setOcrVendor(null);
+    setOcrCategory(null);
 
     try {
       const fd = new FormData();
@@ -127,6 +130,9 @@ export function IntakeWizard() {
       }
       if (data.vendor) {
         setOcrVendor(data.vendor);
+      }
+      if (data.category) {
+        setOcrCategory(data.category);
       }
 
       setOcrFilled(filled);
@@ -266,6 +272,8 @@ export function IntakeWizard() {
       <input type="hidden" name="unmatched_vehicle_year" value={manualVehicleMode ? unmatchedYear : ""} />
       <input type="hidden" name="unmatched_vehicle_make" value={manualVehicleMode ? unmatchedMake : ""} />
       <input type="hidden" name="unmatched_vehicle_stock_number" value={manualVehicleMode ? unmatchedStockNumber : ""} />
+      <input type="hidden" name="ai_suggested_category" value={ocrCategory ?? ""} />
+      <input type="hidden" name="ai_suggested_vendor" value={ocrVendor ?? ""} />
 
       <div className="wizard-steps">
         <div className={step === 1 ? "step active" : "step"}>
@@ -512,6 +520,9 @@ export function IntakeWizard() {
               {ocrLoading && <p className="ocr-scanning">Scanning receipt…</p>}
               {!ocrLoading && ocrVendor && (
                 <p className="ocr-scanning">Detected vendor: <strong>{ocrVendor}</strong></p>
+              )}
+              {!ocrLoading && ocrCategory && (
+                <p className="ocr-scanning">Suggested category: <strong>{ocrCategory}</strong></p>
               )}
             </div>
 

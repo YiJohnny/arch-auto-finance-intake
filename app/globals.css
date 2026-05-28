@@ -456,6 +456,7 @@ textarea {
 
 .admin-nav {
   display: flex;
+  gap: 14px;
   justify-content: flex-end;
   margin: -10px 0 18px;
 }
@@ -464,6 +465,24 @@ textarea {
   color: var(--accent);
   font-weight: 700;
   text-decoration: none;
+}
+
+.cash-grid {
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.cash-balance {
+  margin: 4px 0 8px;
+  color: var(--accent-dark);
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.cash-entry-form h2 {
+  margin-bottom: 16px;
 }
 
 .review-list {
@@ -698,12 +717,46 @@ textarea {
   min-height: 60px;
 }
 
+.post-form {
+  display: grid;
+  gap: 8px;
+}
+
+.post-form label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.post-form select {
+  min-width: 220px;
+}
+
+.review-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.review-meta span {
+  background: #f3f4f6;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
 .badge-submitted  { background: #fef3c7; color: #92400e; }
 .badge-in_review  { background: #e0e7ff; color: #3730a3; }
 .badge-approved   { background: #d1fae5; color: #065f46; }
 .badge-posted     { background: #e6f4f1; color: var(--accent-dark); }
 .badge-rejected   { background: #fee2e2; color: #991b1b; }
 .badge-draft      { background: #f3f4f6; color: #6b7280; }
+.badge-cash-in    { background: #d1fae5; color: #065f46; }
+.badge-cash-out   { background: #fee2e2; color: #991b1b; }
 
 /* ── OCR hints in intake wizard ─────────────────────── */
 
@@ -744,7 +797,8 @@ textarea {
   .search-row,
   .manual-vehicle,
   .review-item,
-  .expanded-content {
+  .expanded-content,
+  .cash-grid {
     grid-template-columns: 1fr;
   }
 

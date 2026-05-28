@@ -27,6 +27,9 @@ export type IntakeSubmission = {
   transaction_date: string | null;
   amount: number | null;
   memo: string | null;
+  ai_suggested_category: string | null;
+  ai_suggested_vendor: string | null;
+  accounting_category: string | null;
   rejection_reason: string | null;
   created_at: string;
   app_profiles: { full_name: string | null; email: string | null } | null;
@@ -78,6 +81,65 @@ function vehicleSummary(s: IntakeSubmission) {
       .join(" ");
   }
   return "—";
+}
+
+const vehicleExpenseCategories = [
+  { value: "FUEL", label: "Fuel" },
+  { value: "REPAIR", label: "Repair & Maintenance" },
+  { value: "PARTS", label: "Parts" },
+  { value: "TOWING", label: "Towing" },
+  { value: "TRANSPORTATION", label: "Transportation" },
+  { value: "CLEANING", label: "Cleaning" },
+  { value: "DETAIL", label: "Detail" },
+  { value: "INSPECTION", label: "Inspection" },
+  { value: "REGISTRATION_FEE", label: "Registration Fee" },
+  { value: "TITLE_FEE", label: "Title Fee" },
+  { value: "OTHER_DIRECT_COST", label: "Other Direct Cost" },
+];
+
+const generalCategories = [
+  { value: "RENT", label: "Rent" },
+  { value: "INSURANCE", label: "Insurance" },
+  { value: "LEGAL_ACCOUNTING", label: "Legal & Accounting" },
+  { value: "OFFICE_SUPPLIES", label: "Office Supplies" },
+  { value: "UTILITIES", label: "Utilities" },
+  { value: "BANK_FEES", label: "Bank Fees" },
+  { value: "DELIVERY_FREIGHT", label: "Delivery / Freight" },
+  { value: "LAUNDRY_UNIFORMS", label: "Laundry & Uniforms" },
+  { value: "OUTSIDE_SERVICES", label: "Outside Services" },
+  { value: "SMALL_TOOLS_SUPPLIES", label: "Small Tools & Supplies" },
+  { value: "TRAVEL", label: "Travel" },
+  { value: "MEALS_ENTERTAINMENT", label: "Meals & Entertainment" },
+  { value: "COMPENSATION", label: "Compensation" },
+  { value: "EMPLOYEE_BENEFITS", label: "Employee Benefits" },
+  { value: "WORKERS_COMPENSATION", label: "Workers Compensation" },
+  { value: "ADVERTISING", label: "Advertising" },
+  { value: "SALES_PROMOTION", label: "Sales Promotion" },
+  { value: "FLOORPLAN_INTEREST", label: "Floorplan Interest" },
+  { value: "BAD_DEBT", label: "Bad Debt" },
+  { value: "REIMBURSEMENT", label: "Reimbursement" },
+  { value: "OTHER_INCOME", label: "Other Income" },
+  { value: "MISCELLANEOUS", label: "Miscellaneous" },
+];
+
+function categoryOptions(s: IntakeSubmission) {
+  if (s.business_cluster !== "general" && s.direction === "expense") return vehicleExpenseCategories;
+  if (s.business_cluster !== "general" && s.direction === "income") {
+    return [{ value: "SALE_PROCEEDS", label: "Vehicle Income / Sale Proceeds" }];
+  }
+  return generalCategories;
+}
+
+function defaultCategory(s: IntakeSubmission) {
+  const options = categoryOptions(s);
+  if (s.accounting_category && options.some((option) => option.value === s.accounting_category)) {
+    return s.accounting_category;
+  }
+  if (s.ai_suggested_category && options.some((option) => option.value === s.ai_suggested_category)) {
+    return s.ai_suggested_category;
+  }
+  if (s.business_cluster !== "general" && s.direction === "income") return "SALE_PROCEEDS";
+  return "";
 }
 
 export function SubmissionsTable({ submissions, documentLinks, tab }: Props) {
@@ -282,6 +344,14 @@ function SubmissionRow({
                 {s.memo && <p>{s.memo}</p>}
                 {!s.memo && <p className="muted">No memo.</p>}
 
+                {(s.ai_suggested_category || s.ai_suggested_vendor || s.accounting_category) && (
+                  <div className="review-meta">
+                    {s.ai_suggested_vendor && <span>AI vendor: {s.ai_suggested_vendor}</span>}
+                    {s.ai_suggested_category && <span>AI category: {s.ai_suggested_category}</span>}
+                    {s.accounting_category && <span>Final category: {s.accounting_category}</span>}
+                  </div>
+                )}
+
                 {s.rejection_reason && (
                   <p className="notice" style={{ margin: 0 }}>
                     Rejected: {s.rejection_reason}
@@ -323,8 +393,24 @@ function SubmissionRow({
                   )}
 
                   {s.status === "approved" && (
-                    <form action={postSubmission} onClick={(e) => e.stopPropagation()}>
+                    <form action={postSubmission} className="post-form" onClick={(e) => e.stopPropagation()}>
                       <input type="hidden" name="submission_id" value={s.submission_id} />
+                      <label htmlFor={`category-${s.submission_id}`}>Accounting category</label>
+                      <select
+                        id={`category-${s.submission_id}`}
+                        name="accounting_category"
+                        defaultValue={defaultCategory(s)}
+                        required
+                      >
+                        <option value="" disabled>
+                          Select category
+                        </option>
+                        {categoryOptions(s).map((category) => (
+                          <option key={category.value} value={category.value}>
+                            {category.label}
+                          </option>
+                        ))}
+                      </select>
                       <button className="button" type="submit">
                         Post to Ledger
                       </button>
@@ -368,4 +454,3 @@ function SubmissionRow({
     </>
   );
 }
-

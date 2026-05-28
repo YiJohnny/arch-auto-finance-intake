@@ -8,6 +8,7 @@ pnpm-debug.log*
 .DS_Store
 tsconfig.tsbuildinfo
 *.docx
+*.xlsx
 compnay_logo.png
 public/company_logo.png
 Retail_Record/**/*.xlsx

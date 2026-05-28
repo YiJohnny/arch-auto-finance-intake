@@ -7,6 +7,7 @@ check (
     payment_method is null
     or payment_method in (
         'self_paid',
+        'store_cash',
         'visa_1209',
         'visa_2829',
         'visa_3173',
