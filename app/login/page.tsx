@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { signIn } from "@/app/auth/actions";
 import { BrandHeader } from "@/app/components/brand-header";
 import { createClient } from "@/utils/supabase/server";
+import { LogIn } from "lucide-react";
 
 type LoginPageProps = {
   searchParams?: Promise<{
@@ -50,6 +51,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               </Link>
             </div>
             <button className="button" type="submit">
+              <LogIn size={17} />
               Sign In
             </button>
           </div>

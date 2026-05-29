@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { signUp } from "@/app/auth/actions";
 import { BrandHeader } from "@/app/components/brand-header";
 import { createClient } from "@/utils/supabase/server";
+import { UserPlus } from "lucide-react";
 
 type SignupPageProps = {
   searchParams?: Promise<{
@@ -50,6 +51,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
               Back to sign in
             </Link>
             <button className="button" type="submit">
+              <UserPlus size={17} />
               Create Account
             </button>
           </div>

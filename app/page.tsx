@@ -5,6 +5,7 @@ import { BrandHeader } from "@/app/components/brand-header";
 import { IntakeWizard } from "@/app/components/intake-wizard";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { ClipboardCheck, LayoutDashboard, WalletCards } from "lucide-react";
 
 type HomePageProps = {
   searchParams?: Promise<{
@@ -41,6 +42,22 @@ export default async function Page({ searchParams }: HomePageProps) {
       <div className="workspace">
         <header className="topbar">
           <BrandHeader />
+          {profile && ["manager", "accountant", "admin"].includes(profile.role) ? (
+            <nav className="topbar-nav" aria-label="Admin navigation">
+              <Link className="active" href="/">
+                <LayoutDashboard size={17} />
+                Dashboard
+              </Link>
+              <Link href="/admin/submissions">
+                <ClipboardCheck size={17} />
+                Review Submissions
+              </Link>
+              <Link href="/admin/cash">
+                <WalletCards size={17} />
+                Store Cash
+              </Link>
+            </nav>
+          ) : null}
           <div className="profile-chip">
             <div>
               <strong>{profile?.full_name ?? user.email}</strong>
@@ -53,13 +70,6 @@ export default async function Page({ searchParams }: HomePageProps) {
             </form>
           </div>
         </header>
-
-        {profile && ["manager", "accountant", "admin"].includes(profile.role) ? (
-          <div className="admin-nav">
-            <Link href="/admin/submissions">Review Submissions</Link>
-            <Link href="/admin/cash">Store Cash</Link>
-          </div>
-        ) : null}
 
         {params?.error ? <p className="notice">{params.error}</p> : null}
 

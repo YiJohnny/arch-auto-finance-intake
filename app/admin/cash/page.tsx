@@ -4,6 +4,7 @@ import { createCashLedgerEntry } from "@/app/admin/actions";
 import { signOut } from "@/app/auth/actions";
 import { BrandHeader } from "@/app/components/brand-header";
 import { createClient } from "@/utils/supabase/server";
+import { ClipboardCheck, LayoutDashboard, WalletCards } from "lucide-react";
 
 type CashPageProps = {
   searchParams?: Promise<{
@@ -76,6 +77,20 @@ export default async function AdminCashPage({ searchParams }: CashPageProps) {
             title="Store Cash"
             subtitle="Track store cash movements separately from income and expense ledgers."
           />
+          <nav className="topbar-nav" aria-label="Admin navigation">
+            <Link href="/">
+              <LayoutDashboard size={17} />
+              Dashboard
+            </Link>
+            <Link href="/admin/submissions">
+              <ClipboardCheck size={17} />
+              Review Submissions
+            </Link>
+            <Link className="active" href="/admin/cash">
+              <WalletCards size={17} />
+              Store Cash
+            </Link>
+          </nav>
           <div className="profile-chip">
             <div>
               <strong>{profile.full_name ?? profile.email ?? user.email}</strong>
@@ -88,11 +103,6 @@ export default async function AdminCashPage({ searchParams }: CashPageProps) {
             </form>
           </div>
         </header>
-
-        <div className="admin-nav">
-          <Link href="/">New Submission</Link>
-          <Link href="/admin/submissions">Review Submissions</Link>
-        </div>
 
         {params?.error ? <p className="notice">{params.error}</p> : null}
         {entriesError ? <p className="notice">{entriesError.message}</p> : null}

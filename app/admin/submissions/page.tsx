@@ -4,6 +4,7 @@ import { signOut } from "@/app/auth/actions";
 import { BrandHeader } from "@/app/components/brand-header";
 import { SubmissionsTable, type IntakeSubmission, type DocumentLink } from "@/app/components/submissions-table";
 import { createClient } from "@/utils/supabase/server";
+import { ClipboardCheck, LayoutDashboard, WalletCards } from "lucide-react";
 
 type AdminSubmissionsPageProps = {
   searchParams?: Promise<{
@@ -82,6 +83,20 @@ export default async function AdminSubmissionsPage({ searchParams }: AdminSubmis
             title="Submission Review"
             subtitle="Approve, reject, and post employee finance submissions."
           />
+          <nav className="topbar-nav" aria-label="Admin navigation">
+            <Link href="/">
+              <LayoutDashboard size={17} />
+              Dashboard
+            </Link>
+            <Link className="active" href="/admin/submissions">
+              <ClipboardCheck size={17} />
+              Review Submissions
+            </Link>
+            <Link href="/admin/cash">
+              <WalletCards size={17} />
+              Store Cash
+            </Link>
+          </nav>
           <div className="profile-chip">
             <div>
               <strong>{profile.full_name ?? profile.email ?? user.email}</strong>
@@ -94,11 +109,6 @@ export default async function AdminSubmissionsPage({ searchParams }: AdminSubmis
             </form>
           </div>
         </header>
-
-        <div className="admin-nav">
-          <Link href="/">New Submission</Link>
-          <Link href="/admin/cash">Store Cash</Link>
-        </div>
 
         {params?.error ? <p className="notice">{params.error}</p> : null}
 

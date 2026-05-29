@@ -3,6 +3,21 @@
 import { useMemo, useState, useTransition } from "react";
 import { saveDraftSubmission } from "@/app/submissions/actions";
 import { createClient } from "@/utils/supabase/client";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Banknote,
+  Building2,
+  CalendarDays,
+  Car,
+  CreditCard,
+  DollarSign,
+  FileUp,
+  Search,
+  StickyNote,
+  Store,
+  Wrench,
+} from "lucide-react";
 
 type BusinessCluster = "repair" | "rental" | "retail" | "general";
 type Direction = "income" | "expense";
@@ -25,6 +40,13 @@ const clusters: Array<{ value: BusinessCluster; label: string }> = [
   { value: "retail", label: "Retail" },
   { value: "general", label: "General" },
 ];
+
+function clusterIcon(value: BusinessCluster) {
+  if (value === "repair") return <Wrench size={22} />;
+  if (value === "rental") return <Car size={22} />;
+  if (value === "retail") return <Store size={22} />;
+  return <Building2 size={22} />;
+}
 
 const repairContexts = [
   { value: "rental_vehicle", label: "Rental Vehicle" },
@@ -277,16 +299,20 @@ export function IntakeWizard() {
 
       <div className="wizard-steps">
         <div className={step === 1 ? "step active" : "step"}>
-          1 Business
+          <span className="step-number">1</span>
+          Business
         </div>
         <div className={step === 2 ? "step active" : "step"}>
-          2 Direction
+          <span className="step-number">2</span>
+          Direction
         </div>
         <div className={step === 3 ? "step active" : "step"}>
-          3 Vehicle
+          <span className="step-number">3</span>
+          Vehicle
         </div>
         <div className={step === 4 ? "step active" : "step"}>
-          4 Details
+          <span className="step-number">4</span>
+          Details
         </div>
       </div>
 
@@ -312,7 +338,8 @@ export function IntakeWizard() {
                   setVehicleQuery("");
                 }}
               >
-                {cluster.label}
+                {clusterIcon(cluster.value)}
+                <span>{cluster.label}</span>
               </button>
             ))}
           </div>
@@ -352,6 +379,7 @@ export function IntakeWizard() {
 
           <div className="actions">
             <button className="button" type="button" onClick={() => setStep(2)}>
+              <ArrowRight size={17} />
               Next
             </button>
           </div>
@@ -363,17 +391,21 @@ export function IntakeWizard() {
           <h3>Is this income or expense?</h3>
           <div className="choice-grid two">
             <button className={direction === "expense" ? "choice selected" : "choice"} type="button" onClick={() => setDirection("expense")}>
-              Expense
+              <CreditCard size={22} />
+              <span>Expense</span>
             </button>
             <button className={direction === "income" ? "choice selected" : "choice"} type="button" onClick={() => setDirection("income")}>
-              Income
+              <Banknote size={22} />
+              <span>Income</span>
             </button>
           </div>
           <div className="actions">
             <button className="button secondary" type="button" onClick={() => setStep(1)}>
+              <ArrowLeft size={17} />
               Back
             </button>
             <button className="button" type="button" onClick={() => setStep(needsVehicleStep ? 3 : 4)}>
+              <ArrowRight size={17} />
               Next
             </button>
           </div>
@@ -396,6 +428,7 @@ export function IntakeWizard() {
                     placeholder="Example: 2018 Toyota Camry, VIN, stock number"
                   />
                   <button className="button" type="button" onClick={searchVehicles} disabled={isPending}>
+                    <Search size={17} />
                     {isPending ? "Searching" : "Search"}
                   </button>
                 </div>
@@ -494,9 +527,11 @@ export function IntakeWizard() {
 
           <div className="actions">
             <button className="button secondary" type="button" onClick={() => setStep(2)}>
+              <ArrowLeft size={17} />
               Back
             </button>
             <button className="button" type="button" onClick={() => setStep(4)}>
+              <ArrowRight size={17} />
               Next
             </button>
           </div>
@@ -508,7 +543,10 @@ export function IntakeWizard() {
           <h3>Upload and finish</h3>
           <div className="form-grid">
             <div className="field full">
-              <label htmlFor="document">Receipt or PDF</label>
+              <label className="label-with-icon" htmlFor="document">
+                <FileUp size={15} />
+                Receipt or PDF
+              </label>
               <p className="field-hint">Upload an image receipt to auto-fill the fields below.</p>
               <input
                 id="document"
@@ -528,7 +566,10 @@ export function IntakeWizard() {
 
             <div className="field">
               <div className="ocr-label-row">
-                <label htmlFor="transaction_date">Transaction Date</label>
+                <label className="label-with-icon" htmlFor="transaction_date">
+                  <CalendarDays size={15} />
+                  Transaction Date
+                </label>
                 {ocrFilled.has("date") && <span className="ocr-chip">from receipt</span>}
               </div>
               <input
@@ -542,7 +583,10 @@ export function IntakeWizard() {
 
             <div className="field">
               <div className="ocr-label-row">
-                <label htmlFor="amount">Amount</label>
+                <label className="label-with-icon" htmlFor="amount">
+                  <DollarSign size={15} />
+                  Amount
+                </label>
                 {ocrFilled.has("amount") && <span className="ocr-chip">from receipt</span>}
               </div>
               <input
@@ -558,7 +602,10 @@ export function IntakeWizard() {
             </div>
 
             <div className="field full">
-              <label htmlFor="payment_method">Payment Method</label>
+              <label className="label-with-icon" htmlFor="payment_method">
+                <CreditCard size={15} />
+                Payment Method
+              </label>
               <select id="payment_method" name="payment_method" defaultValue="self_paid">
                 {paymentMethods.map((method) => (
                   <option key={method.value} value={method.value}>
@@ -570,7 +617,10 @@ export function IntakeWizard() {
 
             <div className="field full">
               <div className="ocr-label-row">
-                <label htmlFor="memo">Notes</label>
+                <label className="label-with-icon" htmlFor="memo">
+                  <StickyNote size={15} />
+                  Notes
+                </label>
                 {ocrFilled.has("memo") && <span className="ocr-chip">from receipt</span>}
               </div>
               <textarea
@@ -593,12 +643,14 @@ export function IntakeWizard() {
 
           <div className="actions">
             <button className="button secondary" type="button" onClick={() => setStep(needsVehicleStep ? 3 : 2)}>
+              <ArrowLeft size={17} />
               Back
             </button>
             <button className="button secondary" name="intent" value="draft" type="submit">
               Save Draft
             </button>
             <button className="button" name="intent" value="submit" type="submit">
+              <ArrowRight size={17} />
               Submit for Review
             </button>
           </div>
