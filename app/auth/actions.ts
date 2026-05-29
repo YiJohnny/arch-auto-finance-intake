@@ -55,7 +55,7 @@ export async function signUp(formData: FormData) {
     email,
     password,
     options: {
-      emailRedirectTo: origin ? `${origin}/auth/confirm` : undefined,
+      emailRedirectTo: origin ? `${origin}/auth/confirm?next=/auth/confirmed` : undefined,
       data: {
         full_name: fullName,
       },
@@ -89,7 +89,7 @@ export async function requestPasswordReset(formData: FormData) {
   }
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: origin ? `${origin}/auth/callback?next=/reset-password` : undefined,
+    redirectTo: origin ? `${origin}/auth/confirm?next=/reset-password` : undefined,
   });
 
   if (error) {
