@@ -998,7 +998,25 @@ textarea {
 
 @media (max-width: 800px) {
   .shell {
+    padding: 12px;
+  }
+
+  .auth-shell {
+    place-items: start center;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(94, 234, 212, 0.12), transparent 34%),
+      linear-gradient(180deg, #111827 0, #111827 118px, #eef2f6 118px, #eef2f6 100%);
+    padding-top: 14px;
+  }
+
+  .auth-card {
+    gap: 12px;
+  }
+
+  .auth-card .brand-header {
+    border-radius: 12px;
     padding: 16px;
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.18);
   }
 
   .topbar,
@@ -1019,27 +1037,63 @@ textarea {
   .topbar {
     flex-direction: column;
     align-items: flex-start;
-    padding: 18px;
+    gap: 12px;
+    margin-bottom: 14px;
+    border-radius: 12px;
+    padding: 14px;
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.16);
+  }
+
+  .topbar .brand-header {
+    flex-basis: auto;
   }
 
   .topbar-nav {
     justify-content: flex-start;
     order: 3;
     width: 100%;
+    min-height: 40px;
     overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .topbar-nav::-webkit-scrollbar {
+    display: none;
   }
 
   .topbar-nav a {
+    min-height: 38px;
     padding: 0 10px;
+    font-size: 13px;
+  }
+
+  .topbar-nav a.active::after {
+    right: 10px;
+    left: 10px;
   }
 
   .brand-header {
     align-items: flex-start;
+    gap: 10px;
+  }
+
+  .brand-name {
+    margin-bottom: 2px;
+    font-size: 11px;
+  }
+
+  .subtitle {
+    margin-top: 4px;
+    font-size: 13px;
+    line-height: 1.35;
   }
 
   .profile-chip {
     width: 100%;
+    min-height: 42px;
     justify-content: space-between;
+    padding: 7px 10px;
   }
 
   .wizard-steps {
@@ -1077,15 +1131,51 @@ textarea {
   }
 
   .title {
-    font-size: 26px;
+    font-size: 24px;
   }
 
   .panel {
-    padding: 20px;
+    border-radius: 10px;
+    padding: 18px;
+  }
+
+  .panel h2 {
+    margin-bottom: 16px;
+    font-size: 20px;
+  }
+
+  .choice {
+    min-height: 70px;
   }
 }
 
 @media (max-width: 420px) {
+  .shell {
+    padding: 10px;
+  }
+
+  .auth-shell {
+    background:
+      radial-gradient(circle at 50% 0%, rgba(94, 234, 212, 0.12), transparent 36%),
+      linear-gradient(180deg, #111827 0, #111827 96px, #eef2f6 96px, #eef2f6 100%);
+  }
+
+  .topbar {
+    padding: 12px;
+  }
+
+  .title {
+    font-size: 22px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+  }
+
+  .topbar-nav a {
+    font-size: 12px;
+  }
+
   .split-actions {
     align-items: stretch;
     flex-direction: column-reverse;
